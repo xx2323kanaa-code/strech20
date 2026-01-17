@@ -9,61 +9,19 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
 <style>
-body {
-  background:#111;
-  color:#eee;
-  font-family:system-ui,sans-serif;
-  margin:0;
-  padding:12px;
-}
-button {
-  width:100%;
-  padding:10px;
-  margin:4px 0;
-  font-size:16px;
-}
-.toggle button.active { background:#2e8bff; color:white; }
-.toggle button.ready { background:#66ccff; color:black; }
-
-#video, #canvas {
-  width:100%;
-  max-height:40vh;
-  background:black;
-}
-
-#timer {
-  width:200px;
-  height:200px;
-  margin:16px auto;
-  border-radius:50%;
-  border:8px solid #444;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:40px;
-  color:white;
-}
-.timer-ready { border-color:#3399ff; }
-.timer-go { box-shadow:0 0 20px #33aaff; }
-.timer-rainbow {
-  animation: rainbow 2s linear infinite;
-}
-@keyframes rainbow {
-  0%{border-color:red}
-  20%{border-color:orange}
-  40%{border-color:yellow}
-  60%{border-color:green}
-  80%{border-color:blue}
-  100%{border-color:violet}
-}
-
-#hud {
-  display:none;
-  background:#222;
-  font-size:12px;
-  padding:6px;
-  white-space:pre-wrap;
-}
+body{background:#111;color:#eee;font-family:system-ui,sans-serif;margin:0;padding:12px}
+button{width:100%;padding:10px;margin:4px 0;font-size:16px}
+.toggle button.active{background:#2e8bff;color:white}
+.toggle button.ready{background:#66ccff;color:black}
+#video,#canvas{width:100%;max-height:40vh;background:black}
+#timer{width:200px;height:200px;margin:16px auto;border-radius:50%;border:8px solid #444;
+display:flex;align-items:center;justify-content:center;font-size:40px}
+.timer-ready{border-color:#3399ff}
+.timer-go{box-shadow:0 0 20px #33aaff}
+.timer-rainbow{animation:rb 2s linear infinite}
+@keyframes rb{0%{border:red}20%{border:orange}40%{border:yellow}
+60%{border:green}80%{border:blue}100%{border:violet}}
+#hud{display:none;background:#222;font-size:12px;padding:6px;white-space:pre-wrap}
 </style>
 </head>
 
@@ -94,14 +52,8 @@ button {
 <div id="hud"></div>
 
 <script>
-let model, stream;
-let exercise = null;
-let facingMode='environment';
-let cocoOK=false;
-let counting=false;
-let startTime=0;
-let preCount=-3;
-let rafId;
+let model,stream,exercise=null,facingMode='environment';
+let cocoOK=false,counting=false,startTime=0,preCount=-3,rafId;
 
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
@@ -110,18 +62,18 @@ const hud=document.getElementById('hud');
 const camBtn=document.getElementById('camBtn');
 
 log('init');
-
-(async()=>{ model=await cocoSsd.load(); log('COCO loaded'); })();
+(async()=>{model=await cocoSsd.load();log('COCO loaded')})();
 
 function selectExercise(btn,type){
   if(counting) resetAll();
   exercise=type;
-  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active','ready'));
+  document.querySelectorAll('.toggle button')
+    .forEach(b=>b.classList.remove('active','ready'));
   btn.classList.add('active');
   log('exercise='+type);
 }
 
-function setFacing(m){ facingMode=m; log('facing='+m); }
+function setFacing(m){facingMode=m;log('facing='+m)}
 
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
@@ -143,37 +95,29 @@ async function capture(){
   const preds=await model.detect(canvas);
   cocoOK=preds.some(p=>p.class==='person');
   log('cocoOK='+cocoOK);
-
-  if(!cocoOK){ alert('下肢が認識されません'); return; }
+  if(!cocoOK){alert('下肢未認識');return}
 
   timer.hidden=false;
   timer.className='timer-ready';
-  document.querySelectorAll('.toggle button.active').forEach(b=>b.classList.add('ready'));
+  document.querySelectorAll('.toggle button.active')
+    .forEach(b=>b.classList.add('ready'));
   timer.textContent='START';
 }
 
-timer.onclick=()=>{ if(!counting && cocoOK) startCount(); };
-
-document.querySelectorAll('.toggle button').forEach(b=>{
-  b.onclick=()=>{ if(counting) resetAll(); };
-});
+timer.onclick=()=>{if(!counting&&cocoOK)startCount()};
 
 function startCount(){
-  counting=true;
-  preCount=-3;
-  timer.className='timer-go';
-  tick();
+  counting=true;preCount=-3;timer.className='timer-go';tick()
 }
 
 function tick(){
   if(!counting) return;
   const now=Date.now();
-
   if(preCount<0){
     timer.textContent=preCount;
-    if(preCount===0){ startTime=now; }
+    if(preCount===0) startTime=now;
     preCount++;
-  } else {
+  }else{
     const sec=Math.floor((now-startTime)/1000);
     timer.textContent=sec;
     if(sec>=20) timer.classList.add('timer-rainbow');
@@ -183,20 +127,18 @@ function tick(){
 
 function resetAll(){
   cancelAnimationFrame(rafId);
-  counting=false;
-  cocoOK=false;
-  timer.hidden=true;
-  timer.className='';
+  counting=false;cocoOK=false;
+  timer.hidden=true;timer.className='';
   canvas.hidden=true;
   camBtn.disabled=false;
-  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('ready','active'));
+  document.querySelectorAll('.toggle button')
+    .forEach(b=>b.classList.remove('active','ready'));
   log('reset');
 }
 
-function toggleHud(){ hud.style.display=hud.style.display==='none'?'block':'none'; }
-function copyHud(){ navigator.clipboard.writeText(hud.textContent); }
-
-function log(m){ hud.textContent+=m+'\n'; }
+function toggleHud(){hud.style.display=hud.style.display==='none'?'block':'none'}
+function copyHud(){navigator.clipboard.writeText(hud.textContent)}
+function log(m){hud.textContent+=m+'\n'}
 </script>
 
 </body>
