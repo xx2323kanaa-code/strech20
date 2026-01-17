@@ -14,13 +14,15 @@ button{width:100%;padding:10px;margin:4px 0;font-size:16px}
 .toggle button.active{background:#2e8bff;color:white}
 .toggle button.ready{background:#66ccff;color:black}
 #video,#canvas{width:100%;max-height:40vh;background:black}
-#timer{width:200px;height:200px;margin:16px auto;border-radius:50%;border:8px solid #444;
-display:flex;align-items:center;justify-content:center;font-size:40px}
+#timer{width:200px;height:200px;margin:16px auto;border-radius:50%;
+border:8px solid #444;display:flex;align-items:center;justify-content:center;
+font-size:40px;user-select:none}
 .timer-ready{border-color:#3399ff}
 .timer-go{box-shadow:0 0 20px #33aaff}
 .timer-rainbow{animation:rb 2s linear infinite}
-@keyframes rb{0%{border:red}20%{border:orange}40%{border:yellow}
-60%{border:green}80%{border:blue}100%{border:violet}}
+@keyframes rb{
+0%{border-color:red}20%{border-color:orange}40%{border-color:yellow}
+60%{border-color:green}80%{border-color:blue}100%{border-color:violet}}
 #hud{display:none;background:#222;font-size:12px;padding:6px;white-space:pre-wrap}
 </style>
 </head>
@@ -47,6 +49,8 @@ display:flex;align-items:center;justify-content:center;font-size:40px}
 
 <div id="timer" hidden>--</div>
 
+<button id="csvBtn" onclick="exportCSV()" disabled>💾 CSV保存</button>
+
 <button onclick="toggleHud()">HUD切替</button>
 <button onclick="copyHud()">ログコピー</button>
 <div id="hud"></div>
@@ -54,12 +58,14 @@ display:flex;align-items:center;justify-content:center;font-size:40px}
 <script>
 let model,stream,exercise=null,facingMode='environment';
 let cocoOK=false,counting=false,startTime=0,preCount=-3,rafId;
+let sessionData=null;
 
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
 const timer=document.getElementById('timer');
 const hud=document.getElementById('hud');
 const camBtn=document.getElementById('camBtn');
+const csvBtn=document.getElementById('csvBtn');
 
 log('init');
 (async()=>{model=await cocoSsd.load();log('COCO loaded')})();
@@ -77,7 +83,8 @@ function setFacing(m){facingMode=m;log('facing='+m)}
 
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facingMode}},audio:false});
+  stream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:facingMode}},audio:false});
   video.srcObject=stream;
   camBtn.disabled=true;
   log('camera start');
@@ -104,15 +111,22 @@ async function capture(){
   timer.textContent='START';
 }
 
-timer.onclick=()=>{if(!counting&&cocoOK)startCount()};
+timer.onclick=()=>{
+  if(!counting && cocoOK) startCount();
+  else if(counting) stopCount();
+};
 
 function startCount(){
-  counting=true;preCount=-3;timer.className='timer-go';tick()
+  counting=true;
+  preCount=-3;
+  timer.className='timer-go';
+  tick();
 }
 
 function tick(){
   if(!counting) return;
   const now=Date.now();
+
   if(preCount<0){
     timer.textContent=preCount;
     if(preCount===0) startTime=now;
@@ -121,8 +135,45 @@ function tick(){
     const sec=Math.floor((now-startTime)/1000);
     timer.textContent=sec;
     if(sec>=20) timer.classList.add('timer-rainbow');
+    if(sec>=120){ stopCount(); return; }
   }
   rafId=requestAnimationFrame(tick);
+}
+
+function stopCount(){
+  cancelAnimationFrame(rafId);
+  counting=false;
+  const now=new Date();
+  const elapsed=Math.floor((Date.now()-startTime)/1000);
+  sessionData={
+    date:now.toISOString().split('T')[0],
+    time:now.toTimeString().split(' ')[0],
+    exercise,
+    elapsed_sec:elapsed,
+    coco_ok:cocoOK
+  };
+  csvBtn.disabled=false;
+  timer.hidden=true;
+  canvas.hidden=true;
+  camBtn.disabled=false;
+  log('timer stop, elapsed='+elapsed);
+}
+
+function exportCSV(){
+  if(!sessionData) return;
+  const {date,time,exercise,elapsed_sec,coco_ok}=sessionData;
+  const csv=
+`date,time,exercise,elapsed_sec,coco_ok
+${date},${time},${exercise},${elapsed_sec},${coco_ok}`;
+  const filename=`stretch_log_${date}_${time.replace(/:/g,'-')}.csv`;
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  sessionData=null;
+  csvBtn.disabled=true;
+  log('csv exported');
 }
 
 function resetAll(){
@@ -131,6 +182,8 @@ function resetAll(){
   timer.hidden=true;timer.className='';
   canvas.hidden=true;
   camBtn.disabled=false;
+  csvBtn.disabled=true;
+  sessionData=null;
   document.querySelectorAll('.toggle button')
     .forEach(b=>b.classList.remove('active','ready'));
   log('reset');
