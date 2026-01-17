@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Gate Stretch Timer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
@@ -48,7 +47,6 @@ font-size:40px;user-select:none}
 <button onclick="capture()">📸 静止画取得</button>
 
 <div id="timer" hidden>--</div>
-
 <button id="csvBtn" onclick="exportCSV()" disabled>💾 CSV保存</button>
 
 <button onclick="toggleHud()">HUD切替</button>
@@ -57,7 +55,10 @@ font-size:40px;user-select:none}
 
 <script>
 let model,stream,exercise=null,facingMode='environment';
-let cocoOK=false,counting=false,startTime=0,preCount=-3,rafId;
+let cocoOK=false,counting=false,rafId;
+let phase='idle';   // ★ 追加
+let preCount=-3;
+let startTime=null;
 let sessionData=null;
 
 const video=document.getElementById('video');
@@ -118,7 +119,9 @@ timer.onclick=()=>{
 
 function startCount(){
   counting=true;
+  phase='pre';
   preCount=-3;
+  startTime=null;
   timer.className='timer-go';
   tick();
 }
@@ -127,11 +130,15 @@ function tick(){
   if(!counting) return;
   const now=Date.now();
 
-  if(preCount<0){
+  if(phase==='pre'){
     timer.textContent=preCount;
-    if(preCount===0) startTime=now;
     preCount++;
-  }else{
+    if(preCount>0){
+      phase='main';
+      startTime=now;       // ★ 必ずここで設定
+      timer.textContent=0;
+    }
+  }else if(phase==='main'){
     const sec=Math.floor((now-startTime)/1000);
     timer.textContent=sec;
     if(sec>=20) timer.classList.add('timer-rainbow');
@@ -141,10 +148,13 @@ function tick(){
 }
 
 function stopCount(){
+  if(!startTime) return;   // ★ ガード
   cancelAnimationFrame(rafId);
   counting=false;
-  const now=new Date();
+  phase='stop';
+
   const elapsed=Math.floor((Date.now()-startTime)/1000);
+  const now=new Date();
   sessionData={
     date:now.toISOString().split('T')[0],
     time:now.toTimeString().split(' ')[0],
@@ -178,7 +188,7 @@ ${date},${time},${exercise},${elapsed_sec},${coco_ok}`;
 
 function resetAll(){
   cancelAnimationFrame(rafId);
-  counting=false;cocoOK=false;
+  counting=false;phase='idle';cocoOK=false;
   timer.hidden=true;timer.className='';
   canvas.hidden=true;
   camBtn.disabled=false;
