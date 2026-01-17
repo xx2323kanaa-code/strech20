@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Gate Stretch Timer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<style>
+body {
+  background:#111;
+  color:#eee;
+  font-family:system-ui,sans-serif;
+  margin:0;
+  padding:12px;
+}
+button {
+  width:100%;
+  padding:10px;
+  margin:4px 0;
+  font-size:16px;
+}
+.toggle button.active { background:#2e8bff; color:white; }
+.toggle button.ready { background:#66ccff; color:black; }
+
+#video, #canvas {
+  width:100%;
+  max-height:40vh;
+  background:black;
+}
+
+#timer {
+  width:200px;
+  height:200px;
+  margin:16px auto;
+  border-radius:50%;
+  border:8px solid #444;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:40px;
+  color:white;
+}
+.timer-ready { border-color:#3399ff; }
+.timer-go { box-shadow:0 0 20px #33aaff; }
+.timer-rainbow {
+  animation: rainbow 2s linear infinite;
+}
+@keyframes rainbow {
+  0%{border-color:red}
+  20%{border-color:orange}
+  40%{border-color:yellow}
+  60%{border-color:green}
+  80%{border-color:blue}
+  100%{border-color:violet}
+}
+
+#hud {
+  display:none;
+  background:#222;
+  font-size:12px;
+  padding:6px;
+  white-space:pre-wrap;
+}
+</style>
+</head>
+
+<body>
+
+<h3>ストレッチ記録</h3>
+
+<div class="toggle">
+  <button onclick="selectExercise(this,'calf')">腓腹筋</button>
+  <button onclick="selectExercise(this,'hip')">股関節</button>
+  <button onclick="selectExercise(this,'rectus')">大腿直筋</button>
+  <button onclick="selectExercise(this,'bridge')">ヒップアップ</button>
+</div>
+
+<button onclick="setFacing('environment')">📷 背面</button>
+<button onclick="setFacing('user')">🤳 対面</button>
+<button id="camBtn" onclick="startCamera()">▶ Camera起動</button>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas" hidden></canvas>
+
+<button onclick="capture()">📸 静止画取得</button>
+
+<div id="timer" hidden>--</div>
+
+<button onclick="toggleHud()">HUD切替</button>
+<button onclick="copyHud()">ログコピー</button>
+<div id="hud"></div>
+
+<script>
+let model, stream;
+let exercise = null;
+let facingMode='environment';
+let cocoOK=false;
+let counting=false;
+let startTime=0;
+let preCount=-3;
+let rafId;
+
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const timer=document.getElementById('timer');
+const hud=document.getElementById('hud');
+const camBtn=document.getElementById('camBtn');
+
+log('init');
+
+(async()=>{ model=await cocoSsd.load(); log('COCO loaded'); })();
+
+function selectExercise(btn,type){
+  if(counting) resetAll();
+  exercise=type;
+  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active','ready'));
+  btn.classList.add('active');
+  log('exercise='+type);
+}
+
+function setFacing(m){ facingMode=m; log('facing='+m); }
+
+async function startCamera(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facingMode}},audio:false});
+  video.srcObject=stream;
+  camBtn.disabled=true;
+  log('camera start');
+}
+
+async function capture(){
+  canvas.hidden=false;
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0);
+  video.srcObject=null;
+  stream.getTracks().forEach(t=>t.stop());
+  log('video stopped');
+
+  const preds=await model.detect(canvas);
+  cocoOK=preds.some(p=>p.class==='person');
+  log('cocoOK='+cocoOK);
+
+  if(!cocoOK){ alert('下肢が認識されません'); return; }
+
+  timer.hidden=false;
+  timer.className='timer-ready';
+  document.querySelectorAll('.toggle button.active').forEach(b=>b.classList.add('ready'));
+  timer.textContent='START';
+}
+
+timer.onclick=()=>{ if(!counting && cocoOK) startCount(); };
+
+document.querySelectorAll('.toggle button').forEach(b=>{
+  b.onclick=()=>{ if(counting) resetAll(); };
+});
+
+function startCount(){
+  counting=true;
+  preCount=-3;
+  timer.className='timer-go';
+  tick();
+}
+
+function tick(){
+  if(!counting) return;
+  const now=Date.now();
+
+  if(preCount<0){
+    timer.textContent=preCount;
+    if(preCount===0){ startTime=now; }
+    preCount++;
+  } else {
+    const sec=Math.floor((now-startTime)/1000);
+    timer.textContent=sec;
+    if(sec>=20) timer.classList.add('timer-rainbow');
+  }
+  rafId=requestAnimationFrame(tick);
+}
+
+function resetAll(){
+  cancelAnimationFrame(rafId);
+  counting=false;
+  cocoOK=false;
+  timer.hidden=true;
+  timer.className='';
+  canvas.hidden=true;
+  camBtn.disabled=false;
+  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('ready','active'));
+  log('reset');
+}
+
+function toggleHud(){ hud.style.display=hud.style.display==='none'?'block':'none'; }
+function copyHud(){ navigator.clipboard.writeText(hud.textContent); }
+
+function log(m){ hud.textContent+=m+'\n'; }
+</script>
+
+</body>
+</html>
