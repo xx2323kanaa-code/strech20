@@ -47,6 +47,7 @@ font-size:40px;user-select:none}
 <button onclick="capture()">📸 静止画取得</button>
 
 <div id="timer" hidden>--</div>
+
 <button id="csvBtn" onclick="exportCSV()" disabled>💾 CSV保存</button>
 
 <button onclick="toggleHud()">HUD切替</button>
@@ -56,10 +57,9 @@ font-size:40px;user-select:none}
 <script>
 let model,stream,exercise=null,facingMode='environment';
 let cocoOK=false,counting=false,rafId;
-let phase='idle';   // ★ 追加
-let preCount=-3;
-let startTime=null;
-let sessionData=null;
+let phase='idle',preCount=-3,startTime=null;
+
+let sessionLog=[];   // ★ 全ログ
 
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
@@ -135,7 +135,7 @@ function tick(){
     preCount++;
     if(preCount>0){
       phase='main';
-      startTime=now;       // ★ 必ずここで設定
+      startTime=now;
       timer.textContent=0;
     }
   }else if(phase==='main'){
@@ -148,20 +148,21 @@ function tick(){
 }
 
 function stopCount(){
-  if(!startTime) return;   // ★ ガード
+  if(!startTime) return;
   cancelAnimationFrame(rafId);
   counting=false;
   phase='stop';
 
   const elapsed=Math.floor((Date.now()-startTime)/1000);
   const now=new Date();
-  sessionData={
+  sessionLog.push({
     date:now.toISOString().split('T')[0],
     time:now.toTimeString().split(' ')[0],
     exercise,
     elapsed_sec:elapsed,
     coco_ok:cocoOK
-  };
+  });
+
   csvBtn.disabled=false;
   timer.hidden=true;
   canvas.hidden=true;
@@ -170,20 +171,23 @@ function stopCount(){
 }
 
 function exportCSV(){
-  if(!sessionData) return;
-  const {date,time,exercise,elapsed_sec,coco_ok}=sessionData;
-  const csv=
-`date,time,exercise,elapsed_sec,coco_ok
-${date},${time},${exercise},${elapsed_sec},${coco_ok}`;
-  const filename=`stretch_log_${date}_${time.replace(/:/g,'-')}.csv`;
+  if(sessionLog.length===0) return;
+
+  let csv='date,time,exercise,elapsed_sec,coco_ok\n';
+  sessionLog.forEach(r=>{
+    csv+=`${r.date},${r.time},${r.exercise},${r.elapsed_sec},${r.coco_ok}\n`;
+  });
+
+  const now=new Date();
+  const fn=`stretch20_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}_${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.csv`;
+
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=filename;
+  a.download=fn;
   a.click();
-  sessionData=null;
-  csvBtn.disabled=true;
-  log('csv exported');
+
+  log('csv exported: '+fn);
 }
 
 function resetAll(){
@@ -192,8 +196,6 @@ function resetAll(){
   timer.hidden=true;timer.className='';
   canvas.hidden=true;
   camBtn.disabled=false;
-  csvBtn.disabled=true;
-  sessionData=null;
   document.querySelectorAll('.toggle button')
     .forEach(b=>b.classList.remove('active','ready'));
   log('reset');
