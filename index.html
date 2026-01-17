@@ -68,7 +68,12 @@ button {
   <button onclick="selectExercise('bridge')">ヒップアップ</button>
 </div>
 
-<button onclick="startCamera()">📷 カメラ起動</button>
+<!-- ★ カメラ向き選択（追加） -->
+<button onclick="setFacing('user')">🤳 対面カメラ</button>
+<button onclick="setFacing('environment')">📷 背面カメラ</button>
+
+<button onclick="startCamera()">▶ カメラ起動</button>
+
 <video id="video" autoplay playsinline></video>
 
 <button onclick="capture()">📸 静止画撮影</button>
@@ -88,6 +93,7 @@ let exercise = null;
 let cocoOK = false;
 let timerInterval;
 let seconds = 20;
+let facingMode = 'environment'; // ★ 追加：デフォルトは背面
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -110,10 +116,23 @@ function selectExercise(type) {
   log('exercise=' + type);
 }
 
+/* ★ カメラ向き指定 */
+function setFacing(mode) {
+  facingMode = mode;
+  log('facingMode=' + mode);
+}
+
+/* ★ カメラ起動（向き反映） */
 async function startCamera() {
-  stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+  }
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: facingMode } },
+    audio: false
+  });
   video.srcObject = stream;
-  log('camera started');
+  log('camera started (' + facingMode + ')');
 }
 
 async function capture() {
